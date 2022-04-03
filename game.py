@@ -27,8 +27,8 @@ __discord__ = "cmyui#0425"
 class Life:
     def __init__(
         self,
-        start_width: Optional[int],
-        start_height: Optional[int],
+        start_width: Optional[int] = None,
+        start_height: Optional[int] = None,
         clear_screen: bool = False,
     ) -> None:
         if start_width is None or start_height is None:
