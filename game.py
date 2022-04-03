@@ -123,11 +123,9 @@ class ConwaysGameOfLife:
     def print_cells_table(self) -> None:
         """Print a given table to stdout."""
         if self.clear_screen:
-            # TODO: optimize this
-            os.system("clear")
-
+            # TODO: may be able to optimize this further if worth it?
             # http://www.climagic.org/mirrors/VT100_Escape_Codes.html
-            # print("\x1b[H\x1b[J") # move to upper left, clear below
+            print(f"\x1b[{self.width}A\x1b[J", end="") # move to upper left, clear below
 
         # TODO: print FPS (and total frames passed?) in corner of screen
 
