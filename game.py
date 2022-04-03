@@ -68,7 +68,7 @@ class ConwaysGameOfLife:
         self.new_height = height
 
     # helper function used to apply the game's rules to each cell
-    def get_alive_neighbours(self, column_idx: int, row_idx: int) -> int:
+    def get_alive_neighbours(self, row_idx: int, column_idx: int) -> int:
         """Find a given cell's (t) count of living neighbours (x).
         # o o o o o          ^
         # o x x x o          | column
@@ -78,22 +78,22 @@ class ConwaysGameOfLife:
         """
         neighbour_indices = (
             # adjacent cells
-            (column_idx, row_idx - 1), # top
-            (column_idx + 1, row_idx), # right
-            (column_idx, row_idx + 1), # bottom
-            (column_idx - 1, row_idx), # left
+            (row_idx - 1, column_idx), # top
+            (row_idx, column_idx + 1), # right
+            (row_idx + 1, column_idx), # bottom
+            (row_idx, column_idx - 1), # left
 
             # diagonal cells
-            (column_idx - 1, row_idx - 1), # top left
-            (column_idx + 1, row_idx - 1), # top right
-            (column_idx - 1, row_idx + 1), # bottom left
-            (column_idx + 1, row_idx + 1), # bottom right
+            (row_idx - 1, column_idx - 1), # top left
+            (row_idx - 1, column_idx + 1), # top right
+            (row_idx + 1, column_idx - 1), # bottom left
+            (row_idx + 1, column_idx + 1), # bottom right
         )
 
         return sum((
             self.prev_cells_table[row_idx][column_idx]
-            for column_idx, row_idx in neighbour_indices
-            if 0 <= column_idx < self.width and 0 <= row_idx < self.height
+            for row_idx, column_idx in neighbour_indices
+            if 0 <= row_idx < self.height and 0 <= column_idx < self.width
         ))
 
     def should_continue_running(self) -> bool:
@@ -104,7 +104,7 @@ class ConwaysGameOfLife:
         applying the game's rules to the cells a single time."""
         for row_idx, row in enumerate(self.cells_table):
             for column_idx, is_alive in enumerate(row):
-                alive_neighbours_count = self.get_alive_neighbours(column_idx, row_idx)
+                alive_neighbours_count = self.get_alive_neighbours(row_idx, column_idx)
 
                 if is_alive:  # rules for living cells
                     # each cell with one of no neighbours dies, as if by solitude
