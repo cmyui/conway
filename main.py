@@ -30,7 +30,6 @@ class Life:
         self,
         start_width: Optional[int] = None,
         start_height: Optional[int] = None,
-        clear_screen: bool = False,
     ) -> None:
         if start_width is None or start_height is None:
             term_width, term_height = os.get_terminal_size()
@@ -38,7 +37,6 @@ class Life:
 
         self.width: int = start_width
         self.height: int = start_height
-        self.clear_screen = clear_screen
 
         # store two buffers, swapping between them each pass
         self.cells_table = [[False] * self.width] * self.height
@@ -130,10 +128,10 @@ class Life:
 
     def print_cells_table(self) -> None:
         """Print a given table to stdout."""
-        if self.clear_screen:
-            # TODO: may be able to optimize this further if worth it?
-            # http://www.climagic.org/mirrors/VT100_Escape_Codes.html
-            print(f"\x1b[{self.width}A\x1b[J", end="") # move to upper left, clear below
+        # clear the current state from the terminal screen
+        # TODO: may be able to optimize this further if worth it?
+        # http://www.climagic.org/mirrors/VT100_Escape_Codes.html
+        print(f"\x1b[{self.width}A\x1b[J", end="") # move to upper left, clear below
 
         output_rows = [
             [
@@ -217,8 +215,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     else:  # not argv
         width, height = None, None
 
-    game = Life(width, height, clear_screen=True)
-
+    game = Life(width, height)
     exit_code = game.run()
 
     return exit_code
