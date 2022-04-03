@@ -56,11 +56,15 @@ class Life:
     def setup_sigwinch_handler(self) -> None:
         """Handle window size changes automatically."""
         def sigwinch_handler(signum: int, frame: Optional[FrameType] = None) -> None:
-            self.change_window_size(width=None, height=None)
+            self.update_window_size(width=None, height=None)
 
         signal.signal(signal.SIGWINCH, sigwinch_handler)
 
-    def change_window_size(self, width: Optional[int], height: Optional[int]) -> None:
+    def update_window_size(
+        self,
+        width: Optional[int] = None,
+        height: Optional[int] = None,
+    ) -> None:
         """Gracefully handle a window size change (on the next frame)."""
         if width is None or height is None:
             term_width, term_height = os.get_terminal_size()
@@ -150,7 +154,7 @@ class Life:
         full_table_size = self.width * self.height
 
         # generate random alive state for each cell in our table
-        random_values = random.choices([True, False], k=(full_table_size))
+        random_values = random.choices([True, False], k=full_table_size)
 
         # overwrite our cells table with the new (random) state
         self.cells_table = [
