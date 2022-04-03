@@ -8,6 +8,7 @@ import os
 import random
 import signal
 import sys
+import time
 from types import FrameType
 from typing import Optional
 from typing import Sequence
@@ -42,6 +43,9 @@ class Life:
         # store two buffers, swapping between them each pass
         self.cells_table = [[False] * self.width] * self.height
         self.prev_cells_table = [[False] * self.width] * self.height
+
+        self.start_time = time.time()
+        self.frame_count = 0
 
         # used when handling window size changes
         self.should_regenerate_screen = False
@@ -127,14 +131,19 @@ class Life:
             # http://www.climagic.org/mirrors/VT100_Escape_Codes.html
             print(f"\x1b[{self.width}A\x1b[J", end="") # move to upper left, clear below
 
-        # TODO: print FPS (and total frames passed?) in corner of screen
-
-        print("\n".join(
-            "".join(
+        output_rows = [
+            [
                 "X" if self.cells_table[row_idx][column_idx] else " "
                 for column_idx in range(self.width)
-            ) for row_idx in range(self.height)
-        ))
+            ] for row_idx in range(self.height)
+        ]
+
+        # add frame rate & count to top right
+        frames_per_sec = self.frame_count / (time.time() - self.start_time)
+        frame_info_output = f" FPS: {frames_per_sec:.2f} | Frames: {self.frame_count}"
+        output_rows[0][self.width - len(frame_info_output):] = frame_info_output
+
+        print("\n".join("".join(row) for row in output_rows))
 
     def randomize_table(self) -> None:
         """Replace the current table of cells with a randomized set of the same size."""
@@ -156,6 +165,7 @@ class Life:
         self.randomize_table()
 
         while self.should_continue_running():
+            # handle pending window size changes
             if self.new_width and self.new_height: # TODO: handle 0s?
                 self.width = self.new_width
                 self.height = self.new_height
@@ -163,6 +173,9 @@ class Life:
 
                 self.new_width = None
                 self.new_height = None
+
+                self.start_time = time.time()
+                self.frame_count = 0
 
             # run a single iteration of the game
             self.apply_rules()
@@ -172,6 +185,8 @@ class Life:
 
             # print the table to stdout
             self.print_cells_table()
+
+            self.frame_count += 1
 
         return 0
 
