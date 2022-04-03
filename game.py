@@ -24,7 +24,7 @@ __discord__ = "cmyui#0425"
 4. any dead cell with exactly three live neighbours becomes a live cell, as if by reproduction
 """
 
-class ConwaysGameOfLife:
+class Life:
     def __init__(
         self,
         start_width: Optional[int],
@@ -198,7 +198,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     else:  # not argv
         width, height = None, None
 
-    game = ConwaysGameOfLife(width, height, clear_screen=True)
+    game = Life(width, height, clear_screen=True)
 
     exit_code = game.run()
 
