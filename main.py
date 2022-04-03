@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import argparse
 import copy
+import hashlib
 import os
 import random
 import signal
 import sys
 import time
+from collections import deque
 from types import FrameType
 from typing import Optional
 from typing import Sequence
@@ -24,6 +26,8 @@ __discord__ = "cmyui#0425"
 3. any live cell with more than three live neighbours dies, as if by overpopulation
 4. any dead cell with exactly three live neighbours becomes a live cell, as if by reproduction
 """
+
+HISTORY_MAX_HASHES = 128
 
 class Life:
     def __init__(
@@ -50,6 +54,8 @@ class Life:
         self.new_width = None
         self.new_height = None
         self.setup_sigwinch_handler()
+
+        self.state_history = deque(maxlen=HISTORY_MAX_HASHES)
 
     def setup_sigwinch_handler(self) -> None:
         """Handle window size changes automatically."""
@@ -101,9 +107,6 @@ class Life:
             for row_idx, column_idx in neighbour_indices
             if 0 <= row_idx < self.height and 0 <= column_idx < self.width
         ))
-
-    def should_continue_running(self) -> bool:
-        return True # TODO: shutdown once a stable state is reached
 
     def apply_rules(self) -> None:
         """Iterate through each value in our cells table,
@@ -166,7 +169,7 @@ class Life:
         """Run the game with the current state."""
         self.randomize_table()
 
-        while self.should_continue_running():
+        while True:
             # handle pending window size changes
             if self.new_width and self.new_height: # TODO: handle 0s?
                 self.width = self.new_width
@@ -185,10 +188,26 @@ class Life:
             # save the current buffer
             self.prev_cells_table = copy.deepcopy(self.cells_table)
 
+            # append this state to the history
+            state_hash = hashlib.sha1(str(self.cells_table).encode()).hexdigest()
+
+            if state_hash in self.state_history:
+                # we've reached a stable (looping) state
+                break
+
+            self.state_history.append(state_hash)
+
             # print the table to stdout
             self.print_cells_table()
 
             self.frame_count += 1
+
+        time_elapsed = time.time() - self.start_time
+
+        print(
+            "Game stabilized within "
+            f"{time_elapsed:.2f} seconds ({self.frame_count} iterations)."
+        )
 
         return 0
 
