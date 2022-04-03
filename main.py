@@ -235,7 +235,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         width, height = None, None
 
     game = Life(width, height)
-    exit_code = game.run()
+
+    try:
+        exit_code = game.run()
+    except KeyboardInterrupt:
+        print("Game interrupted.")
+        exit_code = 1
 
     return exit_code
 
