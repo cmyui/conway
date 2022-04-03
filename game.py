@@ -1,108 +1,211 @@
-from typing import Tuple, List, Optional
-from sys import exit, stdout
-from random import getrandbits
-from time import sleep
+#!/usr/bin/env python3.9
+"""game.py - An implementation of conway's game of life in modern python."""
+from __future__ import annotations
 
-# Rules:
-# Any live cell with fewer than two live neighbours dies, as if by underpopulation.
-# Any live cell with two or three live neighbours lives on to the next generation.
-# Any live cell with more than three live neighbours dies, as if by overpopulation.
-# Any dead cell with exactly three live neighbours becomes a live cell, as if by reproduction.
+import argparse
+import copy
+import os
+import random
+import signal
+import sys
+from types import FrameType
+from typing import Optional
+from typing import Sequence
 
-class Cell(object):
-    def __init__(self, alive: bool = False) -> None:
-        self.alive = alive
+__author__ = "Joshua Smith (cmyui)"
+__email__ = "cmyuiosu@gmail.com"
+__discord__ = "cmyui#0425"
 
-class Grid(object):
-    def __init__(self, x_size: int = 16, y_size: int = 16) -> None:
-        self.x_size = x_size
-        self.y_size = y_size
 
-        self.cells: List[List[Cell]] = [[Cell() for i in range(x_size)] for i in range(y_size)] # TODO: test generator ()
+""" rules of the game
+1. any live cell with fewer than two live neighbours dies, as if by underpopulation
+2. any live cell with two or three live neighbours lives on to the next generation
+3. any live cell with more than three live neighbours dies, as if by overpopulation
+4. any dead cell with exactly three live neighbours becomes a live cell, as if by reproduction
+"""
 
-    @property
-    def get_size(self) -> Tuple[int]:
-        return (self.x_size, self.y_size)
+class ConwaysGameOfLife:
+    def __init__(
+        self,
+        start_width: Optional[int],
+        start_height: Optional[int],
+        clear_screen: bool = False,
+    ) -> None:
+        if start_width is None or start_height is None:
+            term_width, term_height = os.get_terminal_size()
+            start_width, start_height = term_width - 1, term_height - 1
 
-    @property # Not sure if this is proper use case?
-    def get_cell(self, x: int, y: int) -> Cell:
-        return self.cells[x][y]
+        self.width: int = start_width
+        self.height: int = start_height
+        self.clear_screen = clear_screen
 
-    def print_grid(self):
-        for y in self.cells:
-            for x in y:
-                stdout.write('X' if x.alive else ' ')
-            stdout.write('\n')
-        return
+        # store two buffers, swapping between them each pass
+        self.cells_table = [[False] * self.width] * self.height
+        self.prev_cells_table = [[False] * self.width] * self.height
 
-    def clear_grid(self) -> None:
-        for _ in range(self.y_size):
-            for __ in range(self.x_size):
-                stdout.write('\b \b') # Clear a single character
-            stdout.write('\033[F') # Move up a line
-        #stdout.write('\033[F')
-        return
+        # used when handling window size changes
+        self.should_regenerate_screen = False
+        self.new_width = None
+        self.new_height = None
+        self.setup_sigwinch_handler()
 
-    def flip_cell(self, x: int, y: int) -> None:
-        self.cells[y][x].alive = not self.cells[y][x].alive
-        return
+    def setup_sigwinch_handler(self) -> None:
+        """Handle window size changes automatically."""
+        def sigwinch_handler(signum: int, frame: Optional[FrameType] = None) -> None:
+            self.change_window_size(width=None, height=None)
 
-    def get_neighbours(self, _x: int, _y: int) -> Tuple[Optional[bool]]:
-        # Return a tuple of all neighbours `alive` status around X.
-        #  1 2 3
-        #  4 X 5
-        #  6 7 8
-        # For any out-of zone, return None.
-        l: List[Optional[bool]] = []
-        for y in range(_y - 1, _y + 2):
-            if y < 0 or y == self.y_size:
-                l.extend([None, None, None])
-                continue
-            for x in range(_x - 1, _x + 2):
-                if _y == y and _x == x: continue
-                if x < 0 or x == self.x_size:
-                    l.append(None)
-                    continue
+        signal.signal(signal.SIGWINCH, sigwinch_handler)
 
-                l.append(self.cells[y][x].alive)
+    def change_window_size(self, width: Optional[int], height: Optional[int]) -> None:
+        """Gracefully handle a window size change (on the next frame)."""
+        if width is None or height is None:
+            term_width, term_height = os.get_terminal_size()
+            width, height = term_width - 1, term_height - 1
 
-        return tuple(l)
+        # enqueue a size change on the next frame
+        self.should_regenerate_screen = True
+        self.new_width = width
+        self.new_height = height
 
-    def update_grid_full(self) -> None: # Apply the game's rules to the grid.
-        _cells: List[List[Cell]] = [[Cell() for _ in range(self.x_size)] for __ in range(self.y_size)]
-        for y in range(self.y_size):
-            for x in range(self.x_size):
-                neighbours: Tuple[Optional[bool]] = self.get_neighbours(x, y)
+    # helper function used to apply the game's rules to each cell
+    def get_alive_neighbours(self, column_idx: int, row_idx: int) -> int:
+        """Find a given cell's (t) count of living neighbours (x).
+        # o o o o o          ^
+        # o x x x o          | column
+        # o x t x o          v
+        # o x x x o
+        # o o o o o    <-----> row
+        """
+        neighbour_indices = (
+            # adjacent cells
+            (column_idx, row_idx - 1), # top
+            (column_idx + 1, row_idx), # right
+            (column_idx, row_idx + 1), # bottom
+            (column_idx - 1, row_idx), # left
 
-                #if (self.get_cell(x, y)).alive: # This cell was alive before
-                if self.cells[y][x].alive:
-                    # Below 2, die from underpopulation. > 3, die from overpopulation.
-                    if sum(i if i is not None else 0 for i in neighbours) in range(2, 4):
-                        _cells[y][x].alive = True
-                else: # This cell was dead before
-                    # Dead but had 3 neighbours, reprodocution life
-                    if sum(i if i is not None else 0 for i in neighbours) == 3:
-                        _cells[y][x].alive = True
+            # diagonal cells
+            (column_idx - 1, row_idx - 1), # top left
+            (column_idx + 1, row_idx - 1), # top right
+            (column_idx - 1, row_idx + 1), # bottom left
+            (column_idx + 1, row_idx + 1), # bottom right
+        )
 
-        # Update our cells.
-        self.cells = _cells
-        return
+        return sum((
+            self.prev_cells_table[row_idx][column_idx]
+            for column_idx, row_idx in neighbour_indices
+            if 0 <= column_idx < self.width and 0 <= row_idx < self.height
+        ))
 
-    def randomize_grid(self) -> None:
-        for y in self.cells:
-            for x in y:
-                x.alive = getrandbits(1) # Probably fastest?
-        return
+    def should_continue_running(self) -> bool:
+        return True # TODO: shutdown once a stable state is reached
 
-if __name__ == '__main__':
-    print("Conway's Game of Life")
-    g: Grid = Grid(int(input('X: ')), int(input('Y: ')))
-    print_size: int = g.x_size * (g.y_size + 1) # account for newline
+    def apply_rules(self) -> None:
+        """Iterate through each value in our cells table,
+        applying the game's rules to the cells a single time."""
+        for row_idx, row in enumerate(self.cells_table):
+            for column_idx, is_alive in enumerate(row):
+                alive_neighbours_count = self.get_alive_neighbours(column_idx, row_idx)
 
-    g.randomize_grid()
+                if is_alive:  # rules for living cells
+                    # each cell with one of no neighbours dies, as if by solitude
+                    if alive_neighbours_count <= 1:
+                        self.cells_table[row_idx][column_idx] = False
 
-    while True:
-        g.print_grid()
-        g.update_grid_full()
+                    # each cell with four or more neighbours dies, as if by overpopulation
+                    elif alive_neighbours_count >= 4:
+                        self.cells_table[row_idx][column_idx] = False
 
-        g.clear_grid()
+                else:  # rules for dead cells
+                    # each cell with three neighbours becomes populated, as if by reproduction
+                    if alive_neighbours_count == 3:
+                        self.cells_table[row_idx][column_idx] = True
+
+    def print_cells_table(self) -> None:
+        """Print a given table to stdout."""
+        if self.clear_screen:
+            # TODO: optimize this
+            os.system("clear")
+
+            # http://www.climagic.org/mirrors/VT100_Escape_Codes.html
+            # print("\x1b[H\x1b[J") # move to upper left, clear below
+
+        # TODO: print FPS (and total frames passed?) in corner of screen
+
+        print("\n".join(
+            "".join(
+                "X" if self.cells_table[row_idx][column_idx] else " "
+                for column_idx in range(self.width)
+            ) for row_idx in range(self.height)
+        ))
+
+    def randomize_table(self) -> None:
+        """Replace the current table of cells with a randomized set of the same size."""
+        full_table_size = self.width * self.height
+
+        # generate random alive state for each cell in our table
+        random_values = random.choices([True, False], k=(full_table_size))
+
+        # overwrite our cells table with the new (random) state
+        self.cells_table = [
+            random_values[i:i+self.width]
+            for i in range(0, full_table_size, self.width)
+        ]
+
+        self.prev_cells_table = copy.deepcopy(self.cells_table)
+
+    def run(self) -> int:
+        """Run the game with the current state."""
+        self.randomize_table()
+
+        while self.should_continue_running():
+            if self.new_width and self.new_height: # TODO: handle 0s?
+                self.width = self.new_width
+                self.height = self.new_height
+                self.randomize_table()
+
+                self.new_width = None
+                self.new_height = None
+
+            # run a single iteration of the game
+            self.apply_rules()
+
+            # save the current buffer
+            self.prev_cells_table = copy.deepcopy(self.cells_table)
+
+            # print the table to stdout
+            self.print_cells_table()
+
+        return 0
+
+
+def main(argv: Optional[Sequence[str]] = None) -> int:
+    if argv:
+        parser = argparse.ArgumentParser()
+
+        # ./main.py {width} {height}
+        parser.add_argument(
+            "width",
+            help="the width of the game field.",
+            type=int,
+        )
+        parser.add_argument(
+            "height",
+            help="the height of the game field.",
+            type=int,
+        )
+
+        args = parser.parse_args(argv)
+
+        width, height = args.width, args.height
+    else:  # not argv
+        width, height = None, None
+
+    game = ConwaysGameOfLife(width, height, clear_screen=True)
+
+    exit_code = game.run()
+
+    return exit_code
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))
